@@ -10,7 +10,7 @@ const casasInfo = {
     simbolo: '🃏',
     descricao: 'Casa dos coringas, conhecida por sua versatilidade e jogadas imprevisíveis. Estratégia, criatividade e muito estilo definem este time.',
     historia: 'Fundada nos salões da irreverência, The Jokers prova que é possível vencer com estilo e ousadia. Cada jogada é uma carta na manga.',
-    membros: ['Rayara', 'Lindsey', 'Tatiane', 'Maria Clara', 'Felipe G']
+    membros: ['Rayara', 'Lindsey', 'Tatiane', 'Maria Clara', 'Felipe G', 'Julia']
   },
   'Carmesim de Neshão': {
     corPrimaria: '#8B0000', corSecundaria: '#1a0a0a', corTab: '#8B0000',
@@ -28,7 +28,7 @@ const casasInfo = {
     simbolo: '🐺',
     descricao: 'A alcateia unida pela força e lealdade. Sob a luz da lua prateada, os lobos da Blackwolff caçam a vitória com determinação e trabalho em equipe.',
     historia: 'Nas terras geladas do norte, a alcateia Blackwolff forjou sua reputação. Lideradas por guerreiras destemidas, provam que juntos são imbatíveis como lobos em matilha.',
-    membros: ['Maria Eduarda', 'Lindsey', 'Sara', 'Frederico', 'Cauane', 'Felipe P', 'Julia']
+    membros: ['Maria Eduarda', 'Lindsey', 'Sara', 'Frederico', 'Cauane', 'Felipe P',]
   },
   'Reis Templários': {
     corPrimaria: '#1a4d3a',
