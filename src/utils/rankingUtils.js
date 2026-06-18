@@ -42,8 +42,6 @@ export function processarEquipes(data) {
     })
   })
 
-  console.log("📊 CALCULANDO RANKING COM MÉDIAS DA EQUIPE:")
-  
   // ✅ CALCULA PONTUAÇÃO FINAL BASEADA NAS MÉDIAS
   const resultado = Object.entries(equipes).map(([nome, dados]) => {
     // Calcula as MÉDIAS da equipe
@@ -54,68 +52,41 @@ export function processarEquipes(data) {
     
     let pontuacaoFinal = 0
     
-    console.log(`\n🏆 ${nome}:`)
-    console.log(`   Membros: ${dados.membrosCount}`)
-    console.log(`   Média Equipe Manual: ${mediaEquipeManual.toFixed(2)}`)
-    console.log(`   Média Absenteísmo: ${mediaAbsenteismo.toFixed(2)}`)
-    console.log(`   Média Reincidência: ${mediaReincidencia.toFixed(2)}`)
-    console.log(`   Média Engajamento: ${mediaEngajamento.toFixed(2)}`)
-    console.log(`   Tem Sugestão: ${dados.temSugestao ? "SIM" : "NÃO"}`)
-    
     // REGRA 1: Reincidência (baseado na MÉDIA da equipe)
     if (mediaReincidencia === 0) {
       pontuacaoFinal += 20
-      console.log(`   ✅ Reincidência média = 0 → +20`)
     } else if (mediaReincidencia <= 0.5) {
       pontuacaoFinal += 10
-      console.log(`   ⚠️ Reincidência média ≤ 0.5 → +10`)
-    } else {
-      console.log(`   ❌ Reincidência média > 0.5 → +0`)
     }
     
     // REGRA 2: Média Equipe (manual)
     if (mediaEquipeManual >= 95) {
       pontuacaoFinal += 40
-      console.log(`   ✅ Média Equipe ≥ 95 → +40`)
     } else if (mediaEquipeManual >= 94) {
       pontuacaoFinal += 35
-      console.log(`   ✅ Média Equipe ≥ 94 → +35`)
     } else if (mediaEquipeManual >= 93) {
       pontuacaoFinal += 30
-      console.log(`   ✅ Média Equipe ≥ 93 → +30`)
-    } else {
-      console.log(`   ❌ Média Equipe < 93 → +0`)
     }
     
     // REGRA 3: Absenteísmo (baseado na MÉDIA da equipe)
     if (mediaAbsenteismo === 0) {
       pontuacaoFinal += 20
-      console.log(`   ✅ Absenteísmo médio = 0 → +20`)
     } else if (mediaAbsenteismo <= 0.5) {
       pontuacaoFinal += 15
-      console.log(`   ⚠️ Absenteísmo médio ≤ 0.5 → +15`)
     } else if (mediaAbsenteismo <= 1) {
       pontuacaoFinal += 10
-      console.log(`   ⚠️ Absenteísmo médio ≤ 1 → +10`)
-    } else {
-      console.log(`   ❌ Absenteísmo médio > 1 → +0`)
     }
     
     // REGRA 4: Engajamento (baseado na MÉDIA da equipe)
     if (mediaEngajamento >= 0.7) {
       pontuacaoFinal += 10
-      console.log(`   ✅ Engajamento médio ≥ 0.7 → +10`)
     } else if (mediaEngajamento >= 0.4) {
       pontuacaoFinal += 5
-      console.log(`   ⚠️ Engajamento médio ≥ 0.4 → +5`)
-    } else {
-      console.log(`   ❌ Engajamento médio < 0.4 → +0`)
     }
     
     // REGRA 5: Sugestão (se QUALQUER membro tiver)
     if (dados.temSugestao) {
       pontuacaoFinal += 10
-      console.log(`   💡 Algum membro tem sugestão → +10`)
     }
     
     // MVP: maior média individual
@@ -125,8 +96,6 @@ export function processarEquipes(data) {
     let statusEngajamento = "✅ Normal"
     if (mediaEngajamento >= 0.7) statusEngajamento = "🔥 Engajamento Alto"
     else if (mediaEngajamento >= 0.4) statusEngajamento = "📈 Engajamento Médio"
-    
-    console.log(`   🎯 PONTUAÇÃO FINAL: ${pontuacaoFinal}\n`)
     
     return {
       nome,
@@ -166,11 +135,6 @@ export function processarEquipes(data) {
     
     // 5º critério: Maior Engajamento
     return parseFloat(b.mediaEngajamento) - parseFloat(a.mediaEngajamento)
-  })
-  
-  console.log("🏆 RANKING FINAL (COM DESEMPATE):")
-  ranking.forEach((equipe, idx) => {
-    console.log(`   ${idx+1}º ${equipe.nome}: ${equipe.pontos} pts (Média Equipe: ${equipe.mediaEquipe})`)
   })
   
   return ranking

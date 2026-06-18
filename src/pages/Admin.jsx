@@ -80,7 +80,6 @@ function Admin() {
       setPontosMembro(0)
       setDataCriacao('')
       setIsFirstLoad(false)
-      console.log('🧹 Admin carregado - todos os inputs foram limpos!')
     }
   }, [isFirstLoad])
 
@@ -193,11 +192,6 @@ function Admin() {
     
     const mediaEquipeManual = data[0]?.media_equipe || 0
 
-    console.log(`📊 MÉDIAS DA EQUIPE ${equipeNome} (${totalMembros} membros):`)
-    console.log(`   Soma Absenteísmo: ${somaAbsenteismo} → Média: ${(somaAbsenteismo / totalMembros).toFixed(2)}`)
-    console.log(`   Soma Reincidência: ${somaReincidencia} → Média: ${(somaReincidencia / totalMembros).toFixed(2)}`)
-    console.log(`   Soma Engajamento: ${somaEngajamento} → Média: ${(somaEngajamento / totalMembros).toFixed(2)}`)
-
     return {
       mediaAbsenteismo: somaAbsenteismo / totalMembros,
       mediaReincidencia: somaReincidencia / totalMembros,
@@ -212,64 +206,38 @@ function Admin() {
     const medias = await calcularMediasEquipe(equipeNome, mes)
     let pontos = 0
 
-    console.log(`\n🎯 CALCULANDO PONTOS PARA ${equipeNome}:`)
-    console.log(`   Média Equipe Manual: ${medias.mediaEquipeManual}`)
-    console.log(`   Média Reincidência: ${medias.mediaReincidencia.toFixed(2)}`)
-    console.log(`   Média Absenteísmo: ${medias.mediaAbsenteismo.toFixed(2)}`)
-    console.log(`   Média Engajamento: ${medias.mediaEngajamento.toFixed(2)}`)
-
     if (medias.mediaReincidencia === 0) {
       pontos += 20
-      console.log(`   ✅ Reincidência média = 0 → +20 pontos`)
     } else if (medias.mediaReincidencia <= 0.5) {
       pontos += 10
-      console.log(`   ⚠️ Reincidência média ≤ 0.5 → +10 pontos`)
-    } else {
-      console.log(`   ❌ Reincidência média > 0.5 → 0 pontos`)
     }
 
     if (medias.mediaEquipeManual >= 95) {
       pontos += 40
-      console.log(`   ✅ Média Equipe ≥ 95 → +40 pontos`)
     } else if (medias.mediaEquipeManual >= 94) {
       pontos += 35
-      console.log(`   ✅ Média Equipe ≥ 94 → +35 pontos`)
     } else if (medias.mediaEquipeManual >= 93) {
       pontos += 30
-      console.log(`   ✅ Média Equipe ≥ 93 → +30 pontos`)
-    } else {
-      console.log(`   ❌ Média Equipe < 93 → 0 pontos`)
     }
 
     if (medias.mediaAbsenteismo === 0) {
       pontos += 20
-      console.log(`   ✅ Absenteísmo médio = 0 → +20 pontos`)
     } else if (medias.mediaAbsenteismo <= 0.5) {
       pontos += 15
-      console.log(`   ⚠️ Absenteísmo médio ≤ 0.5 → +15 pontos`)
     } else if (medias.mediaAbsenteismo <= 1) {
       pontos += 10
-      console.log(`   ⚠️ Absenteísmo médio ≤ 1 → +10 pontos`)
-    } else {
-      console.log(`   ❌ Absenteísmo médio > 1 → 0 pontos`)
     }
 
     if (medias.mediaEngajamento >= 0.7) {
       pontos += 10
-      console.log(`   ✅ Engajamento médio ≥ 0.7 → +10 pontos`)
     } else if (medias.mediaEngajamento >= 0.4) {
       pontos += 5
-      console.log(`   ⚠️ Engajamento médio ≥ 0.4 → +5 pontos`)
-    } else {
-      console.log(`   ❌ Engajamento médio < 0.4 → 0 pontos`)
     }
 
     if (sugestao && sugestao.trim() !== "") {
       pontos += 10
-      console.log(`   💡 Sugestão preenchida → +10 pontos`)
     }
 
-    console.log(`   🏆 TOTAL: ${pontos} pontos\n`)
     return pontos
   }
 
@@ -280,7 +248,6 @@ function Admin() {
       .eq("mes", mesAtual)
 
     if (error) {
-      console.error("Erro cards:", error)
       return
     }
 
@@ -417,7 +384,7 @@ function Admin() {
       .insert([historicoPayload])
 
     if (historicoError) {
-      console.error('❌ Erro histórico:', historicoError)
+      // Erro silencioso
     }
 
     const { error: updateError } = await supabase
@@ -500,7 +467,7 @@ function Admin() {
       .insert([historicoPayload])
 
     if (historicoError) {
-      console.error('❌ Erro histórico:', historicoError)
+      // Erro silencioso
     }
 
     const { error: updateError } = await supabase
@@ -545,13 +512,6 @@ function Admin() {
     const pontos = await calcularPontosPorEquipe(equipeAtual, mesAtual, formData.sugestao)
     const agoraBrasilia = getHorarioBrasilia()
     
-    console.log('🔍 ===== DEBUG =====')
-    console.log('📅 Horário:', agoraBrasilia)
-    console.log('👤 Usuário:', usuarioLogado)
-    console.log('👤 Membro:', membroAtual)
-    console.log('📅 Mês:', mesAtual)
-    console.log('💰 Pontos calculados (baseado na equipe):', pontos)
-
     const { data: atual } = await supabase
       .from("avaliacoes")
       .select("*")
@@ -561,8 +521,6 @@ function Admin() {
       .maybeSingle()
 
     if (atual) {
-      console.log('📝 Salvando histórico')
-      
       const historicoPayload = {
         membro_nome: atual.membro_nome,
         equipe_nome: atual.equipe_nome,
@@ -586,9 +544,7 @@ function Admin() {
         .insert([historicoPayload])
       
       if (historicoError) {
-        console.error('❌ Erro histórico:', historicoError)
-      } else {
-        console.log('✅ Histórico salvo')
+        // Erro silencioso
       }
     }
 
@@ -616,22 +572,17 @@ function Admin() {
       payload.created_at = agoraBrasilia
     }
 
-    console.log('📤 Payload final:', payload)
-
     const { error } = await supabase
       .from("avaliacoes")
       .upsert([payload], { onConflict: "membro_nome,equipe_nome,mes" })
 
     if (error) {
-      console.error('❌ Erro:', error)
       setPopupMessage(`Erro: ${error.message}`)
       setPopupPontos(0)
       setShowPopup(true)
       setTimeout(() => setShowPopup(false), 3000)
       return
     }
-
-    console.log('✅ Salvo com sucesso!')
 
     setPontosMembro(pontos)
     await atualizarCards()
