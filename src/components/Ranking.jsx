@@ -73,6 +73,7 @@ function Ranking() {
   const [width, setWidth] = useState(window.innerWidth)
   const [filtroMes, setFiltroMes] = useState('todos')
   const [semDados, setSemDados] = useState(false)
+  const [updateCounter, setUpdateCounter] = useState(0)
 
   useEffect(() => {
     const onResize = () => setWidth(window.innerWidth)
@@ -80,9 +81,21 @@ function Ranking() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  // ESCUTA ATUALIZAÇÕES DO ADMIN
+  useEffect(() => {
+    const handleUpdate = () => {
+      console.log('🔄 Ranking atualizado pelo Admin')
+      setUpdateCounter(prev => prev + 1)
+    }
+    
+    window.addEventListener('ranking-update', handleUpdate)
+    return () => window.removeEventListener('ranking-update', handleUpdate)
+  }, [])
+
+  // RECARREGA QUANDO HOUVER ATUALIZAÇÃO
   useEffect(() => {
     carregarDados()
-  }, [filtroMes])
+  }, [filtroMes, updateCounter])
 
   const carregarDados = async () => {
     setLoading(true)

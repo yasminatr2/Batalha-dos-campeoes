@@ -53,6 +53,7 @@ function Admin() {
   const [pontosParaDescontar, setPontosParaDescontar] = useState('')
   const [pontosParaAdicionar, setPontosParaAdicionar] = useState('')
   const [width, setWidth] = useState(window.innerWidth)
+  const [forceUpdate, setForceUpdate] = useState(0)
 
   useEffect(() => {
     const onResize = () => setWidth(window.innerWidth)
@@ -88,12 +89,18 @@ function Admin() {
       carregarDados()
     }
     atualizarCards()
-  }, [membroAtual, equipeAtual, mesAtual, isFirstLoad])
+  }, [membroAtual, equipeAtual, mesAtual, isFirstLoad, forceUpdate])
 
   const meses = ["Junho", "Julho", "Agosto"]
   const mobile = width <= 768
   const tablet = width <= 1024 && width > 768
   const verySmall = width <= 380
+
+  // Função para notificar o ranking sobre mudanças
+  const notificarRanking = () => {
+    setForceUpdate(prev => prev + 1)
+    window.dispatchEvent(new CustomEvent('ranking-update'))
+  }
 
   const getLimitesData = () => {
     const limites = {
@@ -166,7 +173,7 @@ function Admin() {
     return { valido: true, mensagem: '' }
   }
 
-  // ✅ NOVA FUNÇÃO: Calcular médias da equipe
+  // Calcular médias da equipe
   const calcularMediasEquipe = async (equipeNome, mes) => {
     const { data, error } = await supabase
       .from("avaliacoes")
@@ -201,7 +208,7 @@ function Admin() {
     }
   }
 
-  // ✅ NOVA FUNÇÃO: Calcular pontos baseado nas MÉDIAS DA EQUIPE
+  // Calcular pontos baseado nas MÉDIAS DA EQUIPE
   const calcularPontosPorEquipe = async (equipeNome, mes, sugestao) => {
     const medias = await calcularMediasEquipe(equipeNome, mes)
     let pontos = 0
@@ -241,10 +248,38 @@ function Admin() {
     return pontos
   }
 
+  // Calcular pontos INDIVIDUAIS do membro
+  const calcularPontosIndividuais = (dados) => {
+    let pontos = 0
+    
+    // Reincidência
+    if (Number(dados.reincidencia) === 0) pontos += 20
+    else if (Number(dados.reincidencia) <= 0.5) pontos += 10
+    
+    // Média Equipe
+    if (Number(dados.media_equipe) >= 95) pontos += 40
+    else if (Number(dados.media_equipe) >= 94) pontos += 35
+    else if (Number(dados.media_equipe) >= 93) pontos += 30
+    
+    // Absenteísmo
+    if (Number(dados.absenteismo) === 0) pontos += 20
+    else if (Number(dados.absenteismo) <= 0.5) pontos += 15
+    else if (Number(dados.absenteismo) <= 1) pontos += 10
+    
+    // Engajamento
+    if (Number(dados.engajamento) >= 0.7) pontos += 10
+    else if (Number(dados.engajamento) >= 0.4) pontos += 5
+    
+    // Sugestão
+    if (dados.sugestao && dados.sugestao.trim() !== "") pontos += 10
+    
+    return pontos
+  }
+
   const atualizarCards = async () => {
     const { data, error } = await supabase
       .from("avaliacoes")
-      .select("equipe_nome, sugestao, mes")
+      .select("equipe_nome, sugestao, mes, pontos")
       .eq("mes", mesAtual)
 
     if (error) {
@@ -264,12 +299,13 @@ function Admin() {
     const pontuacoesEquipes = []
     
     for (const [equipe, membros] of equipesMap) {
-      const temSugestao = membros.some(m => m.sugestao && m.sugestao.trim() !== "")
-      const pontosEquipe = await calcularPontosPorEquipe(equipe, mesAtual, temSugestao ? "tem sugestão" : "")
+      // Calcula a MÉDIA dos pontos individuais
+      const somaPontos = membros.reduce((acc, m) => acc + (Number(m.pontos) || 0), 0)
+      const mediaPontos = somaPontos / membros.length
       
       pontuacoesEquipes.push({
         equipe,
-        pontos: pontosEquipe
+        pontos: Math.round(mediaPontos * 100) / 100
       })
     }
 
@@ -284,7 +320,7 @@ function Admin() {
       posicao: atualIndex >= 0 ? `${atualIndex + 1}°` : '-',
       pontos: atual.pontos,
       totalEquipes: ranking.length,
-      diffPrimeiro: diff <= 0 ? "Líder" : `+${diff}`,
+      diffPrimeiro: diff <= 0 ? "Líder" : `+${diff.toFixed(1)}`,
       lider: lider.equipe
     })
   }
@@ -324,7 +360,7 @@ function Admin() {
     })
   }
 
-  // ✅ FUNÇÃO PARA DESCONTAR PONTOS GERAIS DO MEMBRO
+  // FUNÇÃO PARA DESCONTAR PONTOS GERAIS DO MEMBRO
   const descontarPontosGerais = async () => {
     const pontosDesconto = Number(pontosParaDescontar)
     if (!pontosParaDescontar || isNaN(pontosDesconto) || pontosDesconto <= 0) {
@@ -407,6 +443,7 @@ function Admin() {
 
     await atualizarCards()
     await carregarDados()
+    notificarRanking()
     setPontosParaDescontar('')
 
     setPopupMessage(`✅ ${pontosDesconto} pontos descontados!\nNova pontuação: ${novaPontuacao} pts`)
@@ -415,7 +452,7 @@ function Admin() {
     setTimeout(() => setShowPopup(false), 4000)
   }
 
-  // ✅ FUNÇÃO PARA ADICIONAR PONTOS GERAIS DO MEMBRO
+  // FUNÇÃO PARA ADICIONAR PONTOS GERAIS DO MEMBRO
   const adicionarPontosGerais = async () => {
     const pontosAdicionar = Number(pontosParaAdicionar)
     if (!pontosParaAdicionar || isNaN(pontosAdicionar) || pontosAdicionar <= 0) {
@@ -490,6 +527,7 @@ function Admin() {
 
     await atualizarCards()
     await carregarDados()
+    notificarRanking()
     setPontosParaAdicionar('')
 
     setPopupMessage(`✅ ${pontosAdicionar} pontos adicionados!\nNova pontuação: ${novaPontuacao} pts`)
@@ -509,7 +547,8 @@ function Admin() {
       return
     }
 
-    const pontos = await calcularPontosPorEquipe(equipeAtual, mesAtual, formData.sugestao)
+    // Calcular pontos individuais do membro
+    const pontosIndividuais = calcularPontosIndividuais(formData)
     const agoraBrasilia = getHorarioBrasilia()
     
     const { data: atual } = await supabase
@@ -564,7 +603,7 @@ function Admin() {
       engajamento: Number(formData.engajamento) || 0,
       data_engajamento: dataEngajamentoFinal,
       sugestao: formData.sugestao || '',
-      pontos: pontos,
+      pontos: pontosIndividuais,
       usuario_responsavel: usuarioLogado
     }
 
@@ -584,12 +623,13 @@ function Admin() {
       return
     }
 
-    setPontosMembro(pontos)
+    setPontosMembro(pontosIndividuais)
     await atualizarCards()
     await carregarDados()
+    notificarRanking()
     
     setPopupMessage(`✅ Avaliação salva!\n📅 ${agoraBrasilia}`)
-    setPopupPontos(pontos)
+    setPopupPontos(pontosIndividuais)
     setShowPopup(true)
     setTimeout(() => setShowPopup(false), 4000)
   }

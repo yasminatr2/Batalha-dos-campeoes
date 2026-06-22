@@ -1,4 +1,4 @@
-// utils/rankingUtils.js - VERSÃO CORRIGIDA COM MÉDIAS DA EQUIPE E DESEMPATE
+// utils/rankingUtils.js - VERSÃO CORRIGIDA COM MÉDIA DOS PONTOS INDIVIDUAIS
 
 export function processarEquipes(data) {
   const equipes = {}
@@ -16,78 +16,48 @@ export function processarEquipes(data) {
         somaMediaEquipe: 0,
         membrosCount: 0,
         membros: [],
-        // Para controle
         temSugestao: false,
-        mediaEquipeManual: 0
+        // Soma dos pontos individuais
+        somaPontosIndividuais: 0
       }
     }
 
-    // ✅ SOMA para calcular MÉDIAS (NÃO soma pontos individuais)
+    // SOMA para calcular MÉDIAS
     equipes[eq].somaAbsenteismo += Number(item.absenteismo) || 0
     equipes[eq].somaReincidencia += Number(item.reincidencia) || 0
     equipes[eq].somaEngajamento += Number(item.engajamento) || 0
     equipes[eq].somaMediaEquipe += Number(item.media_equipe) || 0
     equipes[eq].membrosCount++
     
-    // Verifica se tem sugestão (qualquer membro)
+    // SOMA OS PONTOS INDIVIDUAIS
+    equipes[eq].somaPontosIndividuais += Number(item.pontos) || 0
+    
+    // Verifica se tem sugestão
     if (item.sugestao && item.sugestao.trim() !== "") {
       equipes[eq].temSugestao = true
     }
     
-    // Guarda membros para calcular MVP (melhor média individual)
+    // Guarda membros para MVP
     equipes[eq].membros.push({
       nome: item.membro_nome,
       mediaIndividual: Number(item.media_individual) || 0,
-      pontos: Number(item.pontos) || 0  // apenas para referência
+      pontos: Number(item.pontos) || 0
     })
   })
 
-  // ✅ CALCULA PONTUAÇÃO FINAL BASEADA NAS MÉDIAS
+  // CALCULA PONTUAÇÃO FINAL
   const resultado = Object.entries(equipes).map(([nome, dados]) => {
-    // Calcula as MÉDIAS da equipe
+    // Calcula as MÉDIAS
     const mediaAbsenteismo = dados.somaAbsenteismo / dados.membrosCount
     const mediaReincidencia = dados.somaReincidencia / dados.membrosCount
     const mediaEngajamento = dados.somaEngajamento / dados.membrosCount
     const mediaEquipeManual = dados.somaMediaEquipe / dados.membrosCount
     
-    let pontuacaoFinal = 0
+    // CALCULA A MÉDIA DOS PONTOS INDIVIDUAIS
+    const mediaPontosIndividuais = dados.somaPontosIndividuais / dados.membrosCount
     
-    // REGRA 1: Reincidência (baseado na MÉDIA da equipe)
-    if (mediaReincidencia === 0) {
-      pontuacaoFinal += 20
-    } else if (mediaReincidencia <= 0.5) {
-      pontuacaoFinal += 10
-    }
-    
-    // REGRA 2: Média Equipe (manual)
-    if (mediaEquipeManual >= 95) {
-      pontuacaoFinal += 40
-    } else if (mediaEquipeManual >= 94) {
-      pontuacaoFinal += 35
-    } else if (mediaEquipeManual >= 93) {
-      pontuacaoFinal += 30
-    }
-    
-    // REGRA 3: Absenteísmo (baseado na MÉDIA da equipe)
-    if (mediaAbsenteismo === 0) {
-      pontuacaoFinal += 20
-    } else if (mediaAbsenteismo <= 0.5) {
-      pontuacaoFinal += 15
-    } else if (mediaAbsenteismo <= 1) {
-      pontuacaoFinal += 10
-    }
-    
-    // REGRA 4: Engajamento (baseado na MÉDIA da equipe)
-    if (mediaEngajamento >= 0.7) {
-      pontuacaoFinal += 10
-    } else if (mediaEngajamento >= 0.4) {
-      pontuacaoFinal += 5
-    }
-    
-    // REGRA 5: Sugestão (se QUALQUER membro tiver)
-    if (dados.temSugestao) {
-      pontuacaoFinal += 10
-    }
+    // USA A MÉDIA dos pontos (70, 80, 90 → média 80)
+    const pontuacaoFinal = Math.round(mediaPontosIndividuais * 100) / 100
     
     // MVP: maior média individual
     const mvp = [...dados.membros].sort((a, b) => b.mediaIndividual - a.mediaIndividual)[0]
@@ -107,11 +77,14 @@ export function processarEquipes(data) {
       statusEngajamento,
       mvp: mvp?.nome || "-",
       totalMembros: dados.membrosCount,
-      temSugestao: dados.temSugestao
+      temSugestao: dados.temSugestao,
+      // Dados extras para debug
+      somaPontos: dados.somaPontosIndividuais,
+      mediaPontos: mediaPontosIndividuais.toFixed(2)
     }
   })
   
-  // ✅ ORDENAÇÃO COM CRITÉRIOS DE DESEMPATE
+  // ORDENAÇÃO COM CRITÉRIOS DE DESEMPATE
   const ranking = resultado.sort((a, b) => {
     // 1º critério: Pontuação (maior primeiro)
     if (b.pontos !== a.pontos) {
