@@ -22,10 +22,37 @@ const equipesData = {
   }
 }
 
+// 🔥 Configuração das etapas
+const etapasConfig = {
+  'Junho': {
+    total: 2,
+    etapas: [
+      { id: 1, nome: '1ª Etapa', periodo: '1º a 15 de Junho' },
+      { id: 2, nome: '2ª Etapa', periodo: '16º a 30 de Junho' }
+    ]
+  },
+  'Julho': {
+    total: 2,
+    etapas: [
+      { id: 1, nome: '1ª Etapa', periodo: '1º a 15 de Julho' },
+      { id: 2, nome: '2ª Etapa', periodo: '16º a 31 de Julho' }
+    ]
+  },
+  'Agosto': {
+    total: 2,
+    etapas: [
+      { id: 1, nome: '1ª Etapa', periodo: '1º a 15 de Agosto' },
+      { id: 2, nome: '2ª Etapa', periodo: '16º a 31 de Agosto' }
+    ]
+  }
+}
+
 function Admin() {
   const [equipeAtual, setEquipeAtual] = useState("The Jokers")
   const [membroAtual, setMembroAtual] = useState("Tatiane")
   const [mesAtual, setMesAtual] = useState("Junho")
+  const [etapaAtual, setEtapaAtual] = useState(1) // 🔥 NOVO: etapa selecionada
+  
   const [formData, setFormData] = useState({
     media_individual: '',
     media_suprema: '',
@@ -36,7 +63,13 @@ function Admin() {
     data_engajamento: '',
     sugestao: ''
   })
+  
   const [pontosMembro, setPontosMembro] = useState(0)
+  const [mediaEtapaMembro, setMediaEtapaMembro] = useState(0) // 🔥 Média da etapa atual
+  const [mediaFinalMembro, setMediaFinalMembro] = useState(0) // 🔥 Média final do membro
+  const [avaliacoesCount, setAvaliacoesCount] = useState(0)
+  const [historicoAvaliacoes, setHistoricoAvaliacoes] = useState([])
+  const [movimentacoes, setMovimentacoes] = useState([])
   const [usuarioLogado, setUsuarioLogado] = useState('')
   const [dataCriacao, setDataCriacao] = useState('')
   const [cardsData, setCardsData] = useState({
@@ -52,8 +85,11 @@ function Admin() {
   const [isFirstLoad, setIsFirstLoad] = useState(true)
   const [pontosParaDescontar, setPontosParaDescontar] = useState('')
   const [pontosParaAdicionar, setPontosParaAdicionar] = useState('')
+  const [motivoDesconto, setMotivoDesconto] = useState('')
+  const [motivoAdicao, setMotivoAdicao] = useState('')
   const [width, setWidth] = useState(window.innerWidth)
   const [forceUpdate, setForceUpdate] = useState(0)
+  const [etapasSalvas, setEtapasSalvas] = useState([]) // 🔥 Quais etapas já foram salvas
 
   useEffect(() => {
     const onResize = () => setWidth(window.innerWidth)
@@ -65,6 +101,29 @@ function Admin() {
     const usuario = localStorage.getItem("usuario_logado") || localStorage.getItem("usuario") || "Admin"
     setUsuarioLogado(usuario)
   }, [])
+
+  // 🔥 Verificar quais etapas estão salvas
+  useEffect(() => {
+    verificarEtapasSalvas()
+  }, [mesAtual, equipeAtual, membroAtual])
+
+  const verificarEtapasSalvas = async () => {
+    const { data, error } = await supabase
+      .from("avaliacoes")
+      .select("etapa")
+      .eq("membro_nome", membroAtual)
+      .eq("equipe_nome", equipeAtual)
+      .eq("mes", mesAtual)
+      .order("etapa", { ascending: true })
+
+    if (error) {
+      console.error("Erro ao verificar etapas:", error)
+      return
+    }
+
+    const salvas = data ? data.map(item => item.etapa) : []
+    setEtapasSalvas(salvas)
+  }
 
   useEffect(() => {
     if (isFirstLoad) {
@@ -79,6 +138,11 @@ function Admin() {
         sugestao: ''
       })
       setPontosMembro(0)
+      setMediaEtapaMembro(0)
+      setMediaFinalMembro(0)
+      setAvaliacoesCount(0)
+      setHistoricoAvaliacoes([])
+      setMovimentacoes([])
       setDataCriacao('')
       setIsFirstLoad(false)
     }
@@ -89,14 +153,12 @@ function Admin() {
       carregarDados()
     }
     atualizarCards()
-  }, [membroAtual, equipeAtual, mesAtual, isFirstLoad, forceUpdate])
+  }, [membroAtual, equipeAtual, mesAtual, etapaAtual, isFirstLoad, forceUpdate])
 
   const meses = ["Junho", "Julho", "Agosto"]
   const mobile = width <= 768
   const tablet = width <= 1024 && width > 768
-  const verySmall = width <= 380
 
-  // Função para notificar o ranking sobre mudanças
   const notificarRanking = () => {
     setForceUpdate(prev => prev + 1)
     window.dispatchEvent(new CustomEvent('ranking-update'))
@@ -173,7 +235,6 @@ function Admin() {
     return { valido: true, mensagem: '' }
   }
 
-  // Calcular médias da equipe
   const calcularMediasEquipe = async (equipeNome, mes) => {
     const { data, error } = await supabase
       .from("avaliacoes")
@@ -208,7 +269,6 @@ function Admin() {
     }
   }
 
-  // Calcular pontos baseado nas MÉDIAS DA EQUIPE
   const calcularPontosPorEquipe = async (equipeNome, mes, sugestao) => {
     const medias = await calcularMediasEquipe(equipeNome, mes)
     let pontos = 0
@@ -248,46 +308,140 @@ function Admin() {
     return pontos
   }
 
-  // Calcular pontos INDIVIDUAIS do membro
   const calcularPontosIndividuais = (dados) => {
     let pontos = 0
     
-    // Reincidência
     if (Number(dados.reincidencia) === 0) pontos += 20
     else if (Number(dados.reincidencia) <= 0.5) pontos += 10
     
-    // Média Equipe
     if (Number(dados.media_equipe) >= 95) pontos += 40
     else if (Number(dados.media_equipe) >= 94) pontos += 35
     else if (Number(dados.media_equipe) >= 93) pontos += 30
     
-    // Absenteísmo
     if (Number(dados.absenteismo) === 0) pontos += 20
     else if (Number(dados.absenteismo) <= 0.5) pontos += 15
     else if (Number(dados.absenteismo) <= 1) pontos += 10
     
-    // Engajamento
     if (Number(dados.engajamento) >= 0.7) pontos += 10
     else if (Number(dados.engajamento) >= 0.4) pontos += 5
     
-    // Sugestão
     if (dados.sugestao && dados.sugestao.trim() !== "") pontos += 10
     
     return pontos
   }
 
+  // ============================================
+  // REGISTRAR MOVIMENTAÇÃO
+  // ============================================
+  const registrarMovimentacao = async (membroNome, equipeNome, mes, etapa, tipo, quantidade, pontosAntes, pontosDepois, motivo) => {
+    const payload = {
+      membro_nome: membroNome,
+      equipe_nome: equipeNome,
+      mes: mes,
+      etapa: etapa, // 🔥 ADICIONA A ETAPA
+      data_movimentacao: new Date().toISOString(),
+      tipo_movimentacao: tipo,
+      quantidade: Number(quantidade),
+      pontos_antes: Number(pontosAntes),
+      pontos_depois: Number(pontosDepois),
+      motivo: motivo || (tipo === 'avaliacao_inicial' ? 'Avaliação inicial' : ''),
+      usuario_responsavel: usuarioLogado,
+      created_at: new Date().toISOString()
+    }
+
+    const { data, error } = await supabase
+      .from("movimentacoes_pontos")
+      .insert([payload])
+      .select()
+
+    if (error) {
+      console.error("Erro ao registrar movimentação:", error)
+      return null
+    }
+
+    return data?.[0] || null
+  }
+
+  // ============================================
+  // CALCULAR MÉDIA DO MEMBRO POR ETAPA
+  // ============================================
+  const calcularMediaMembroPorEtapa = async (membroNome, equipeNome, mes, etapa) => {
+    try {
+      const { data: movs, error } = await supabase
+        .from("movimentacoes_pontos")
+        .select("*")
+        .eq("membro_nome", membroNome)
+        .eq("equipe_nome", equipeNome)
+        .eq("mes", mes)
+        .eq("etapa", etapa)
+        .order("data_movimentacao", { ascending: true })
+
+      if (error || !movs || movs.length === 0) {
+        return { media: 0, count: 0, pontos: [] }
+      }
+
+      const pontos = movs.map(mov => mov.pontos_depois)
+      const total = pontos.reduce((a, b) => a + b, 0)
+      const media = total / pontos.length
+
+      return {
+        media: Math.round(media * 100) / 100,
+        count: pontos.length,
+        pontos: pontos
+      }
+    } catch (error) {
+      console.error("Erro ao calcular média por etapa:", error)
+      return { media: 0, count: 0, pontos: [] }
+    }
+  }
+
+  // ============================================
+  // CALCULAR MÉDIA FINAL DO MEMBRO
+  // ============================================
+  const calcularMediaFinalMembro = async (membroNome, equipeNome, mes) => {
+    try {
+      const etapas = etapasConfig[mes]?.etapas || []
+      let somaMedias = 0
+      let count = 0
+
+      for (const etapa of etapas) {
+        const resultado = await calcularMediaMembroPorEtapa(membroNome, equipeNome, mes, etapa.id)
+        if (resultado.count > 0) {
+          somaMedias += resultado.media
+          count++
+        }
+      }
+
+      const mediaFinal = count > 0 ? somaMedias / count : 0
+      return Math.round(mediaFinal * 100) / 100
+    } catch (error) {
+      console.error("Erro ao calcular média final:", error)
+      return 0
+    }
+  }
+
+  // ============================================
+  // FUNÇÃO PARA CALCULAR A MÉDIA DO MÊS (Mantida para compatibilidade)
+  // ============================================
+  const calcularMediaMes = async (membroNome, equipeNome, mes) => {
+    return await calcularMediaFinalMembro(membroNome, equipeNome, mes)
+  }
+
+  // ============================================
+  // ATUALIZAR CARDS - COM ETAPAS
+  // ============================================
   const atualizarCards = async () => {
     const { data, error } = await supabase
       .from("avaliacoes")
-      .select("equipe_nome, sugestao, mes, pontos")
+      .select("equipe_nome, sugestao, mes, membro_nome, pontos, etapa")
       .eq("mes", mesAtual)
 
     if (error) {
+      console.error("Erro ao buscar dados para cards:", error)
       return
     }
 
     const equipesMap = new Map()
-    
     for (const item of data) {
       const equipe = item.equipe_nome
       if (!equipesMap.has(equipe)) {
@@ -299,13 +453,27 @@ function Admin() {
     const pontuacoesEquipes = []
     
     for (const [equipe, membros] of equipesMap) {
-      // Calcula a MÉDIA dos pontos individuais
-      const somaPontos = membros.reduce((acc, m) => acc + (Number(m.pontos) || 0), 0)
-      const mediaPontos = somaPontos / membros.length
+      let somaMediasFinal = 0
+      let countMembros = 0
+      
+      for (const membro of membros) {
+        // 🔥 Calcula a média final do membro (média de todas as etapas)
+        const mediaFinal = await calcularMediaFinalMembro(
+          membro.membro_nome,
+          equipe,
+          mesAtual
+        )
+        if (mediaFinal > 0) {
+          somaMediasFinal += mediaFinal
+          countMembros++
+        }
+      }
+      
+      const mediaEquipe = countMembros > 0 ? somaMediasFinal / countMembros : 0
       
       pontuacoesEquipes.push({
         equipe,
-        pontos: Math.round(mediaPontos * 100) / 100
+        pontos: Math.round(mediaEquipe * 100) / 100
       })
     }
 
@@ -360,11 +528,21 @@ function Admin() {
     })
   }
 
-  // FUNÇÃO PARA DESCONTAR PONTOS GERAIS DO MEMBRO
+  // ============================================
+  // DESCONTAR PONTOS
+  // ============================================
   const descontarPontosGerais = async () => {
     const pontosDesconto = Number(pontosParaDescontar)
     if (!pontosParaDescontar || isNaN(pontosDesconto) || pontosDesconto <= 0) {
       setPopupMessage('⚠️ Informe quantos pontos deseja descontar (valor positivo)')
+      setPopupPontos(0)
+      setShowPopup(true)
+      setTimeout(() => setShowPopup(false), 3000)
+      return
+    }
+
+    if (!motivoDesconto || motivoDesconto.trim() === '') {
+      setPopupMessage('⚠️ Informe o motivo do desconto!')
       setPopupPontos(0)
       setShowPopup(true)
       setTimeout(() => setShowPopup(false), 3000)
@@ -377,6 +555,7 @@ function Admin() {
       .eq("membro_nome", membroAtual)
       .eq("equipe_nome", equipeAtual)
       .eq("mes", mesAtual)
+      .eq("etapa", etapaAtual)
       .maybeSingle()
 
     if (buscaError || !registroAtual) {
@@ -396,23 +575,13 @@ function Admin() {
     }
 
     const novaPontuacao = registroAtual.pontos - pontosDesconto
+    const agoraBrasilia = getHorarioBrasilia()
+    const motivo = motivoDesconto.trim()
 
+    // Salva no histórico
     const historicoPayload = {
-      membro_nome: registroAtual.membro_nome,
-      equipe_nome: registroAtual.equipe_nome,
-      mes: registroAtual.mes,
-      media_individual: registroAtual.media_individual,
-      media_suprema: registroAtual.media_suprema,
-      media_equipe: registroAtual.media_equipe,
-      reincidencia: registroAtual.reincidencia,
-      absenteismo: registroAtual.absenteismo,
-      engajamento: registroAtual.engajamento,
-      data_engajamento: registroAtual.data_engajamento,
-      sugestao: registroAtual.sugestao,
-      pontos: registroAtual.pontos,
-      usuario_responsavel: registroAtual.usuario_responsavel,
-      created_at: registroAtual.created_at,
-      alterado_em: getHorarioBrasilia()
+      ...registroAtual,
+      alterado_em: agoraBrasilia
     }
 
     const { error: historicoError } = await supabase
@@ -420,18 +589,33 @@ function Admin() {
       .insert([historicoPayload])
 
     if (historicoError) {
-      // Erro silencioso
+      console.error("Erro ao salvar histórico:", historicoError)
     }
+
+    // REGISTRA MOVIMENTAÇÃO
+    await registrarMovimentacao(
+      membroAtual,
+      equipeAtual,
+      mesAtual,
+      etapaAtual,
+      'remocao',
+      pontosDesconto,
+      registroAtual.pontos,
+      novaPontuacao,
+      motivo
+    )
 
     const { error: updateError } = await supabase
       .from("avaliacoes")
       .update({
         pontos: novaPontuacao,
-        usuario_responsavel: usuarioLogado
+        usuario_responsavel: usuarioLogado,
+        alterado_em: agoraBrasilia
       })
       .eq("membro_nome", membroAtual)
       .eq("equipe_nome", equipeAtual)
       .eq("mes", mesAtual)
+      .eq("etapa", etapaAtual)
 
     if (updateError) {
       setPopupMessage(`❌ Erro ao descontar: ${updateError.message}`)
@@ -441,22 +625,36 @@ function Admin() {
       return
     }
 
+    const resultadoMedia = await calcularMediaMembroPorEtapa(membroAtual, equipeAtual, mesAtual, etapaAtual)
+    const mediaFinal = await calcularMediaFinalMembro(membroAtual, equipeAtual, mesAtual)
+
     await atualizarCards()
     await carregarDados()
     notificarRanking()
     setPontosParaDescontar('')
+    setMotivoDesconto('')
 
-    setPopupMessage(`✅ ${pontosDesconto} pontos descontados!\nNova pontuação: ${novaPontuacao} pts`)
+    setPopupMessage(`✅ ${pontosDesconto} pontos descontados!\nNova pontuação: ${novaPontuacao} pts\n📊 Média da etapa: ${resultadoMedia.media.toFixed(2)} pts\n📊 Média final: ${mediaFinal.toFixed(2)} pts\nMotivo: ${motivo}`)
     setPopupPontos(-pontosDesconto)
     setShowPopup(true)
     setTimeout(() => setShowPopup(false), 4000)
   }
 
-  // FUNÇÃO PARA ADICIONAR PONTOS GERAIS DO MEMBRO
+  // ============================================
+  // ADICIONAR PONTOS
+  // ============================================
   const adicionarPontosGerais = async () => {
     const pontosAdicionar = Number(pontosParaAdicionar)
     if (!pontosParaAdicionar || isNaN(pontosAdicionar) || pontosAdicionar <= 0) {
       setPopupMessage('⚠️ Informe quantos pontos deseja adicionar (valor positivo)')
+      setPopupPontos(0)
+      setShowPopup(true)
+      setTimeout(() => setShowPopup(false), 3000)
+      return
+    }
+
+    if (!motivoAdicao || motivoAdicao.trim() === '') {
+      setPopupMessage('⚠️ Informe o motivo da adição!')
       setPopupPontos(0)
       setShowPopup(true)
       setTimeout(() => setShowPopup(false), 3000)
@@ -469,6 +667,7 @@ function Admin() {
       .eq("membro_nome", membroAtual)
       .eq("equipe_nome", equipeAtual)
       .eq("mes", mesAtual)
+      .eq("etapa", etapaAtual)
       .maybeSingle()
 
     if (buscaError || !registroAtual) {
@@ -480,23 +679,13 @@ function Admin() {
     }
 
     const novaPontuacao = registroAtual.pontos + pontosAdicionar
+    const agoraBrasilia = getHorarioBrasilia()
+    const motivo = motivoAdicao.trim()
 
+    // Salva no histórico
     const historicoPayload = {
-      membro_nome: registroAtual.membro_nome,
-      equipe_nome: registroAtual.equipe_nome,
-      mes: registroAtual.mes,
-      media_individual: registroAtual.media_individual,
-      media_suprema: registroAtual.media_suprema,
-      media_equipe: registroAtual.media_equipe,
-      reincidencia: registroAtual.reincidencia,
-      absenteismo: registroAtual.absenteismo,
-      engajamento: registroAtual.engajamento,
-      data_engajamento: registroAtual.data_engajamento,
-      sugestao: registroAtual.sugestao,
-      pontos: registroAtual.pontos,
-      usuario_responsavel: registroAtual.usuario_responsavel,
-      created_at: registroAtual.created_at,
-      alterado_em: getHorarioBrasilia()
+      ...registroAtual,
+      alterado_em: agoraBrasilia
     }
 
     const { error: historicoError } = await supabase
@@ -504,18 +693,33 @@ function Admin() {
       .insert([historicoPayload])
 
     if (historicoError) {
-      // Erro silencioso
+      console.error("Erro ao salvar histórico:", historicoError)
     }
+
+    // REGISTRA MOVIMENTAÇÃO
+    await registrarMovimentacao(
+      membroAtual,
+      equipeAtual,
+      mesAtual,
+      etapaAtual,
+      'adicao',
+      pontosAdicionar,
+      registroAtual.pontos,
+      novaPontuacao,
+      motivo
+    )
 
     const { error: updateError } = await supabase
       .from("avaliacoes")
       .update({
         pontos: novaPontuacao,
-        usuario_responsavel: usuarioLogado
+        usuario_responsavel: usuarioLogado,
+        alterado_em: agoraBrasilia
       })
       .eq("membro_nome", membroAtual)
       .eq("equipe_nome", equipeAtual)
       .eq("mes", mesAtual)
+      .eq("etapa", etapaAtual)
 
     if (updateError) {
       setPopupMessage(`❌ Erro ao adicionar: ${updateError.message}`)
@@ -525,18 +729,24 @@ function Admin() {
       return
     }
 
+    const resultadoMedia = await calcularMediaMembroPorEtapa(membroAtual, equipeAtual, mesAtual, etapaAtual)
+    const mediaFinal = await calcularMediaFinalMembro(membroAtual, equipeAtual, mesAtual)
+
     await atualizarCards()
     await carregarDados()
     notificarRanking()
     setPontosParaAdicionar('')
+    setMotivoAdicao('')
 
-    setPopupMessage(`✅ ${pontosAdicionar} pontos adicionados!\nNova pontuação: ${novaPontuacao} pts`)
+    setPopupMessage(`✅ ${pontosAdicionar} pontos adicionados!\nNova pontuação: ${novaPontuacao} pts\n📊 Média da etapa: ${resultadoMedia.media.toFixed(2)} pts\n📊 Média final: ${mediaFinal.toFixed(2)} pts\nMotivo: ${motivo}`)
     setPopupPontos(pontosAdicionar)
     setShowPopup(true)
     setTimeout(() => setShowPopup(false), 4000)
   }
 
-  // Salvar dados
+  // ============================================
+  // SALVAR AVALIAÇÃO - COM ETAPAS
+  // ============================================
   const salvarDados = async () => {
     const validacao = validarCamposObrigatorios()
     if (!validacao.valido) {
@@ -547,34 +757,43 @@ function Admin() {
       return
     }
 
-    // Calcular pontos individuais do membro
-    const pontosIndividuais = calcularPontosIndividuais(formData)
+    const novosPontos = calcularPontosIndividuais(formData)
     const agoraBrasilia = getHorarioBrasilia()
     
-    const { data: atual } = await supabase
+    const { data: registroExistente, error: buscaError } = await supabase
       .from("avaliacoes")
       .select("*")
       .eq("membro_nome", membroAtual)
       .eq("equipe_nome", equipeAtual)
       .eq("mes", mesAtual)
+      .eq("etapa", etapaAtual)
       .maybeSingle()
 
-    if (atual) {
+    if (buscaError) {
+      setPopupMessage(`❌ Erro ao buscar dados: ${buscaError.message}`)
+      setPopupPontos(0)
+      setShowPopup(true)
+      setTimeout(() => setShowPopup(false), 3000)
+      return
+    }
+
+    let pontosAntes = 0
+    let tipoMov = 'avaliacao_inicial'
+    let motivo = 'Avaliação inicial'
+
+    if (registroExistente) {
+      pontosAntes = registroExistente.pontos
+      const pontosBaseAtual = calcularPontosIndividuais(registroExistente)
+      const ajusteManual = registroExistente.pontos - pontosBaseAtual
+      const novosPontosAjustados = novosPontos + ajusteManual
+      
+      const pontosFinais = novosPontosAjustados < 0 ? 0 : novosPontosAjustados
+      
+      tipoMov = pontosFinais > pontosAntes ? 'adicao' : pontosFinais < pontosAntes ? 'remocao' : 'avaliacao_inicial'
+      motivo = pontosFinais !== pontosAntes ? 'Atualização de avaliação' : 'Avaliação sem alteração'
+
       const historicoPayload = {
-        membro_nome: atual.membro_nome,
-        equipe_nome: atual.equipe_nome,
-        mes: atual.mes,
-        media_individual: atual.media_individual,
-        media_suprema: atual.media_suprema,
-        media_equipe: atual.media_equipe,
-        reincidencia: atual.reincidencia,
-        absenteismo: atual.absenteismo,
-        engajamento: atual.engajamento,
-        data_engajamento: atual.data_engajamento,
-        sugestao: atual.sugestao,
-        pontos: atual.pontos,
-        usuario_responsavel: atual.usuario_responsavel,
-        created_at: atual.created_at,
+        ...registroExistente,
         alterado_em: agoraBrasilia
       }
       
@@ -583,66 +802,162 @@ function Admin() {
         .insert([historicoPayload])
       
       if (historicoError) {
-        // Erro silencioso
+        console.error("Erro ao salvar histórico:", historicoError)
       }
-    }
 
-    const dataEngajamentoFinal = Number(formData.engajamento) === 1 
-      ? formData.data_engajamento 
-      : null
+      // Atualiza o payload com os pontos finais
+      const dataEngajamentoFinal = Number(formData.engajamento) === 1 ? formData.data_engajamento : null
 
-    const payload = {
-      membro_nome: membroAtual,
-      equipe_nome: equipeAtual,
-      mes: mesAtual,
-      media_individual: Number(formData.media_individual) || 0,
-      media_suprema: Number(formData.media_suprema) || 0,
-      media_equipe: Number(formData.media_equipe) || 0,
-      reincidencia: Number(formData.reincidencia) || 0,
-      absenteismo: Number(formData.absenteismo) || 0,
-      engajamento: Number(formData.engajamento) || 0,
-      data_engajamento: dataEngajamentoFinal,
-      sugestao: formData.sugestao || '',
-      pontos: pontosIndividuais,
-      usuario_responsavel: usuarioLogado
-    }
+      const payload = {
+        membro_nome: membroAtual,
+        equipe_nome: equipeAtual,
+        mes: mesAtual,
+        etapa: etapaAtual,
+        media_individual: Number(formData.media_individual) || 0,
+        media_suprema: Number(formData.media_suprema) || 0,
+        media_equipe: Number(formData.media_equipe) || 0,
+        reincidencia: Number(formData.reincidencia) || 0,
+        absenteismo: Number(formData.absenteismo) || 0,
+        engajamento: Number(formData.engajamento) || 0,
+        data_engajamento: dataEngajamentoFinal,
+        sugestao: formData.sugestao || '',
+        pontos: pontosFinais,
+        usuario_responsavel: usuarioLogado,
+        alterado_em: agoraBrasilia
+      }
 
-    if (!atual) {
-      payload.created_at = agoraBrasilia
-    }
+      if (!registroExistente) {
+        payload.created_at = agoraBrasilia
+      }
 
-    const { error } = await supabase
-      .from("avaliacoes")
-      .upsert([payload], { onConflict: "membro_nome,equipe_nome,mes" })
+      const { error } = await supabase
+        .from("avaliacoes")
+        .upsert([payload], { onConflict: "membro_nome,equipe_nome,mes,etapa" })
 
-    if (error) {
-      setPopupMessage(`Erro: ${error.message}`)
-      setPopupPontos(0)
+      if (error) {
+        setPopupMessage(`Erro: ${error.message}`)
+        setPopupPontos(0)
+        setShowPopup(true)
+        setTimeout(() => setShowPopup(false), 3000)
+        return
+      }
+
+      // REGISTRA MOVIMENTAÇÃO
+      const diff = Math.abs(pontosFinais - pontosAntes) || pontosFinais
+      await registrarMovimentacao(
+        membroAtual,
+        equipeAtual,
+        mesAtual,
+        etapaAtual,
+        tipoMov,
+        diff,
+        pontosAntes,
+        pontosFinais,
+        motivo
+      )
+
+      const resultadoMedia = await calcularMediaMembroPorEtapa(membroAtual, equipeAtual, mesAtual, etapaAtual)
+      const mediaFinal = await calcularMediaFinalMembro(membroAtual, equipeAtual, mesAtual)
+
+      setPontosMembro(pontosFinais)
+      setMediaEtapaMembro(resultadoMedia.media)
+      setMediaFinalMembro(mediaFinal)
+      setAvaliacoesCount(resultadoMedia.count)
+      
+      await atualizarCards()
+      await carregarDados()
+      notificarRanking()
+      await verificarEtapasSalvas()
+      
+      setPopupMessage(`✅ Avaliação salva!\n📅 ${agoraBrasilia}\n📊 Pontuação: ${pontosFinais} pts\n📊 Média da etapa: ${resultadoMedia.media.toFixed(2)} pts\n📊 Média final: ${mediaFinal.toFixed(2)} pts`)
+      setPopupPontos(pontosFinais)
       setShowPopup(true)
-      setTimeout(() => setShowPopup(false), 3000)
-      return
-    }
+      setTimeout(() => setShowPopup(false), 4000)
+    } else {
+      // Primeira avaliação desta etapa
+      const dataEngajamentoFinal = Number(formData.engajamento) === 1 ? formData.data_engajamento : null
 
-    setPontosMembro(pontosIndividuais)
-    await atualizarCards()
-    await carregarDados()
-    notificarRanking()
-    
-    setPopupMessage(`✅ Avaliação salva!\n📅 ${agoraBrasilia}`)
-    setPopupPontos(pontosIndividuais)
-    setShowPopup(true)
-    setTimeout(() => setShowPopup(false), 4000)
+      const payload = {
+        membro_nome: membroAtual,
+        equipe_nome: equipeAtual,
+        mes: mesAtual,
+        etapa: etapaAtual,
+        media_individual: Number(formData.media_individual) || 0,
+        media_suprema: Number(formData.media_suprema) || 0,
+        media_equipe: Number(formData.media_equipe) || 0,
+        reincidencia: Number(formData.reincidencia) || 0,
+        absenteismo: Number(formData.absenteismo) || 0,
+        engajamento: Number(formData.engajamento) || 0,
+        data_engajamento: dataEngajamentoFinal,
+        sugestao: formData.sugestao || '',
+        pontos: novosPontos,
+        usuario_responsavel: usuarioLogado,
+        created_at: agoraBrasilia,
+        alterado_em: agoraBrasilia
+      }
+
+      const { error } = await supabase
+        .from("avaliacoes")
+        .insert([payload])
+
+      if (error) {
+        setPopupMessage(`Erro: ${error.message}`)
+        setPopupPontos(0)
+        setShowPopup(true)
+        setTimeout(() => setShowPopup(false), 3000)
+        return
+      }
+
+      // REGISTRA MOVIMENTAÇÃO
+      await registrarMovimentacao(
+        membroAtual,
+        equipeAtual,
+        mesAtual,
+        etapaAtual,
+        'avaliacao_inicial',
+        novosPontos,
+        0,
+        novosPontos,
+        'Avaliação inicial'
+      )
+
+      const resultadoMedia = await calcularMediaMembroPorEtapa(membroAtual, equipeAtual, mesAtual, etapaAtual)
+      const mediaFinal = await calcularMediaFinalMembro(membroAtual, equipeAtual, mesAtual)
+
+      setPontosMembro(novosPontos)
+      setMediaEtapaMembro(resultadoMedia.media)
+      setMediaFinalMembro(mediaFinal)
+      setAvaliacoesCount(resultadoMedia.count)
+      
+      await atualizarCards()
+      await carregarDados()
+      notificarRanking()
+      await verificarEtapasSalvas()
+      
+      setPopupMessage(`✅ ${etapasConfig[mesAtual]?.etapas.find(e => e.id === etapaAtual)?.nome} salva!\n📅 ${agoraBrasilia}\n📊 Pontuação: ${novosPontos} pts\n📊 Média da etapa: ${resultadoMedia.media.toFixed(2)} pts\n📊 Média final: ${mediaFinal.toFixed(2)} pts`)
+      setPopupPontos(novosPontos)
+      setShowPopup(true)
+      setTimeout(() => setShowPopup(false), 4000)
+    }
   }
 
-  // Carregar dados do membro
+  // ============================================
+  // CARREGAR DADOS
+  // ============================================
   const carregarDados = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("avaliacoes")
       .select("*")
       .eq("membro_nome", membroAtual)
       .eq("equipe_nome", equipeAtual)
       .eq("mes", mesAtual)
+      .eq("etapa", etapaAtual)
       .maybeSingle()
+
+    if (error) {
+      console.error("Erro ao carregar dados:", error)
+      return
+    }
 
     if (!data) {
       setFormData({
@@ -656,6 +971,10 @@ function Admin() {
         sugestao: ''
       })
       setPontosMembro(0)
+      setMediaEtapaMembro(0)
+      setAvaliacoesCount(0)
+      setHistoricoAvaliacoes([])
+      setMovimentacoes([])
       setDataCriacao('')
       return
     }
@@ -672,12 +991,39 @@ function Admin() {
     })
     setPontosMembro(data.pontos || 0)
     
+    // Busca movimentações da etapa
+    const { data: movs } = await supabase
+      .from("movimentacoes_pontos")
+      .select("*")
+      .eq("membro_nome", membroAtual)
+      .eq("equipe_nome", equipeAtual)
+      .eq("mes", mesAtual)
+      .eq("etapa", etapaAtual)
+      .order("data_movimentacao", { ascending: false })
+
+    setMovimentacoes(movs || [])
+
+    // Calcula a média da etapa
+    const resultadoMedia = await calcularMediaMembroPorEtapa(
+      membroAtual,
+      equipeAtual,
+      mesAtual,
+      etapaAtual
+    )
+    
+    setMediaEtapaMembro(resultadoMedia.media)
+    setAvaliacoesCount(resultadoMedia.count)
+    setHistoricoAvaliacoes(resultadoMedia.pontos || [])
+    
+    // Calcula a média final
+    const mediaFinal = await calcularMediaFinalMembro(membroAtual, equipeAtual, mesAtual)
+    setMediaFinalMembro(mediaFinal)
+    
     if (data.created_at) {
       setDataCriacao(formatarDataBrasilia(data.created_at))
     }
   }
 
-  // Exportar Excel
   const exportarExcel = async () => {
     const { data, error } = await supabase
       .from("avaliacoes")
@@ -713,9 +1059,15 @@ function Admin() {
       sugestao: ''
     })
     setPontosMembro(0)
+    setMediaEtapaMembro(0)
+    setAvaliacoesCount(0)
+    setHistoricoAvaliacoes([])
+    setMovimentacoes([])
     setDataCriacao('')
     setPontosParaDescontar('')
     setPontosParaAdicionar('')
+    setMotivoDesconto('')
+    setMotivoAdicao('')
     setPopupMessage('🧹 Todos os campos foram limpos!')
     setPopupPontos(0)
     setShowPopup(true)
@@ -734,6 +1086,10 @@ function Admin() {
 
   const isDataEngajamentoObrigatoria = Number(formData.engajamento) === 1
   const limitesData = getLimitesData()
+  const etapasDoMes = etapasConfig[mesAtual]?.etapas || []
+
+  // 🔥 Verifica se a etapa atual já foi salva
+  const etapaJaSalva = etapasSalvas.includes(etapaAtual)
 
   return (
     <div style={{
@@ -799,56 +1155,6 @@ function Admin() {
             }}>
               {popupMessage}
             </p>
-            {(popupPontos > 0 && popupMessage.includes('salva')) && (
-              <div style={{
-                marginTop: '1rem',
-                padding: '0.5rem',
-                borderTop: '1px solid rgba(212, 175, 90, 0.3)',
-                borderBottom: '1px solid rgba(212, 175, 90, 0.3)'
-              }}>
-                <span style={{
-                  fontFamily: "'Cinzel Decorative', serif",
-                  fontSize: mobile ? '1.5rem' : '2rem',
-                  background: 'linear-gradient(135deg, #F5D488, #D4A83A)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent'
-                }}>
-                  +{popupPontos} pts
-                </span>
-              </div>
-            )}
-            {(popupPontos > 0 && popupMessage.includes('adicionados')) && (
-              <div style={{
-                marginTop: '1rem',
-                padding: '0.5rem',
-                borderTop: '1px solid rgba(74, 158, 110, 0.3)',
-                borderBottom: '1px solid rgba(74, 158, 110, 0.3)'
-              }}>
-                <span style={{
-                  fontFamily: "'Cinzel Decorative', serif",
-                  fontSize: mobile ? '1.5rem' : '2rem',
-                  color: '#4a9e6e'
-                }}>
-                  +{popupPontos} pts
-                </span>
-              </div>
-            )}
-            {popupPontos < 0 && (
-              <div style={{
-                marginTop: '1rem',
-                padding: '0.5rem',
-                borderTop: '1px solid rgba(232, 80, 104, 0.3)',
-                borderBottom: '1px solid rgba(232, 80, 104, 0.3)'
-              }}>
-                <span style={{
-                  fontFamily: "'Cinzel Decorative', serif",
-                  fontSize: mobile ? '1.5rem' : '2rem',
-                  color: '#E85068'
-                }}>
-                  {popupPontos} pts
-                </span>
-              </div>
-            )}
             <button
               onClick={() => setShowPopup(false)}
               style={{
@@ -1009,7 +1315,10 @@ function Admin() {
           {meses.map(mes => (
             <button
               key={mes}
-              onClick={() => setMesAtual(mes)}
+              onClick={() => {
+                setMesAtual(mes)
+                setEtapaAtual(1)
+              }}
               style={{
                 background: mesAtual === mes ? 'linear-gradient(135deg, #D4A83A, #F5D488)' : 'rgba(26, 26, 46, 0.5)',
                 border: `1px solid ${mesAtual === mes ? '#F5D488' : 'rgba(212, 175, 90, 0.3)'}`,
@@ -1044,6 +1353,77 @@ function Admin() {
           >
             📜 EXPORTAR
           </button>
+        </div>
+
+        {/* 🔥 SELEÇÃO DE ETAPA */}
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: mobile ? '0.4rem' : '0.8rem',
+          marginBottom: mobile ? '1rem' : '1.5rem',
+          justifyContent: 'center',
+          background: 'rgba(26, 26, 46, 0.3)',
+          border: '1px solid rgba(212, 175, 90, 0.2)',
+          padding: mobile ? '0.5rem' : '0.8rem',
+          borderRadius: '12px'
+        }}>
+          <span style={{
+            fontFamily: "'IM Fell English SC', serif",
+            fontSize: mobile ? '0.5rem' : '0.65rem',
+            color: '#D4A83A',
+            display: 'flex',
+            alignItems: 'center',
+            marginRight: '0.5rem'
+          }}>
+            📌 ETAPAS:
+          </span>
+          {etapasDoMes.map(etapa => {
+            const salva = etapasSalvas.includes(etapa.id)
+            return (
+              <button
+                key={etapa.id}
+                onClick={() => setEtapaAtual(etapa.id)}
+                style={{
+                  background: etapaAtual === etapa.id 
+                    ? 'linear-gradient(135deg, #D4A83A, #F5D488)' 
+                    : salva 
+                      ? 'rgba(74, 158, 110, 0.3)' 
+                      : 'rgba(26, 26, 46, 0.4)',
+                  border: `1px solid ${
+                    etapaAtual === etapa.id 
+                      ? '#F5D488' 
+                      : salva 
+                        ? 'rgba(74, 158, 110, 0.5)' 
+                        : 'rgba(212, 175, 90, 0.3)'
+                  }`,
+                  color: etapaAtual === etapa.id ? '#1a1410' : salva ? '#4a9e6e' : '#D4A83A',
+                  padding: mobile ? '0.3rem 0.6rem' : '0.5rem 1.2rem',
+                  fontFamily: "'Cinzel', serif",
+                  fontSize: mobile ? '0.5rem' : '0.65rem',
+                  cursor: 'pointer',
+                  borderRadius: '8px',
+                  flex: mobile ? '1' : 'auto',
+                  minWidth: mobile ? '50px' : 'auto',
+                  textAlign: 'center',
+                  opacity: salva ? 1 : 0.7
+                }}
+              >
+                {etapa.nome}
+                {salva && ' ✅'}
+                {!salva && ' ⬜'}
+              </button>
+            )
+          })}
+          <span style={{
+            fontFamily: "'IM Fell English SC', serif",
+            fontSize: mobile ? '0.45rem' : '0.55rem',
+            color: '#A89870',
+            display: 'flex',
+            alignItems: 'center',
+            marginLeft: '0.5rem'
+          }}>
+            {etapasSalvas.length} de {etapasDoMes.length} salvas
+          </span>
         </div>
 
         <div style={{
@@ -1124,6 +1504,7 @@ function Admin() {
                 }}
               >
                 {membro}
+                {etapaJaSalva && ' ✅'}
               </button>
             ))}
           </div>
@@ -1138,6 +1519,16 @@ function Admin() {
             marginBottom: mobile ? '1rem' : '1.5rem'
           }}>
             ⚔️ {membroAtual} ⚔️
+            <span style={{
+              display: 'block',
+              fontSize: mobile ? '0.5rem' : '0.6rem',
+              color: '#A89870',
+              marginTop: '0.2rem'
+            }}>
+              {etapasConfig[mesAtual]?.etapas.find(e => e.id === etapaAtual)?.nome || `Etapa ${etapaAtual}`}
+              {etapaJaSalva && ' ✅ Salva'}
+              {!etapaJaSalva && ' ⬜ Pendente'}
+            </span>
           </h3>
 
           {dataCriacao && (
@@ -1188,7 +1579,6 @@ function Admin() {
               <small style={{ fontSize: mobile ? '0.45rem' : '0.6rem', color: '#A89870' }}>1(10) 0(0)</small>
             </div>
 
-            {/* DATA ENGAJAMENTO */}
             <div style={{ gridColumn: mobile ? '1' : tablet ? '1 / -1' : '1 / -1' }}>
               <label style={{ fontFamily: "'IM Fell English SC', serif", fontSize: mobile ? '0.5rem' : '0.65rem', color: '#D4A83A' }}>
                 DATA ENGAJAMENTO {isDataEngajamentoObrigatoria && <span style={{ color: '#E85068' }}>*</span>}
@@ -1231,13 +1621,11 @@ function Admin() {
               )}
             </div>
 
-            {/* SUGESTÃO DE MELHORIA COM BOTÃO LIMPAR CAMPOS ABAIXO */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontFamily: "'IM Fell English SC', serif", fontSize: mobile ? '0.5rem' : '0.65rem', color: '#D4A83A' }}>SUGESTÃO DE MELHORIA</label>
               <textarea name="sugestao" rows={mobile ? 2 : 3} value={formData.sugestao} onChange={handleInputChange} style={{ width: '100%', background: 'rgba(26, 26, 46, 0.5)', border: '1px solid rgba(212, 175, 90, 0.3)', color: '#F5F0E0', padding: mobile ? '0.5rem' : '0.8rem', borderRadius: '10px', resize: 'vertical', fontSize: mobile ? '0.8rem' : '1rem' }} />
               <small style={{ fontSize: mobile ? '0.45rem' : '0.6rem', color: '#A89870' }}>Preenchida ganha +10 pontos</small>
               
-              {/* BOTÃO LIMPAR CAMPOS - AGORA AQUI */}
               <button
                 onClick={limparInputs}
                 style={{
@@ -1272,7 +1660,9 @@ function Admin() {
             style={{
               width: '100%',
               marginTop: mobile ? '1rem' : '2rem',
-              background: 'linear-gradient(135deg, #D4A83A, #F5D488)',
+              background: etapaJaSalva 
+                ? 'linear-gradient(135deg, #2d7a3b, #4a9e6e)' 
+                : 'linear-gradient(135deg, #D4A83A, #F5D488)',
               padding: mobile ? '0.7rem' : '1rem',
               fontFamily: "'Cinzel', serif",
               fontSize: mobile ? '0.65rem' : '0.8rem',
@@ -1292,10 +1682,9 @@ function Admin() {
               e.target.style.boxShadow = 'none'
             }}
           >
-            SALVAR AVALIAÇÃO
+            {etapaJaSalva ? '✅ ATUALIZAR ETAPA' : '📌 SALVAR ETAPA'}
           </button>
 
-          {/* SEÇÃO DE ADICIONAR E DESCONTAR PONTOS - DEPOIS DO BOTÃO SALVAR */}
           <div style={{
             marginTop: mobile ? '1rem' : '1.5rem',
             display: 'grid',
@@ -1306,7 +1695,6 @@ function Admin() {
             padding: mobile ? '0.8rem' : '1rem',
             borderRadius: '16px'
           }}>
-            {/* DESCONTAR PONTOS */}
             <div>
               <label style={{ fontFamily: "'IM Fell English SC', serif", fontSize: mobile ? '0.5rem' : '0.6rem', color: '#E85068', display: 'block', marginBottom: '0.3rem' }}>
                 💀 DESCONTAR PONTOS
@@ -1314,7 +1702,8 @@ function Admin() {
               <div style={{
                 display: 'flex',
                 gap: '0.3rem',
-                alignItems: 'center'
+                alignItems: 'center',
+                flexWrap: 'wrap'
               }}>
                 <input
                   type="number"
@@ -1323,6 +1712,7 @@ function Admin() {
                   min="1"
                   style={{
                     flex: 1,
+                    minWidth: '50px',
                     background: 'rgba(26, 26, 46, 0.5)',
                     border: '1px solid rgba(232, 80, 104, 0.5)',
                     color: '#F5F0E0',
@@ -1332,9 +1722,24 @@ function Admin() {
                     fontSize: mobile ? '0.7rem' : '0.9rem'
                   }}
                 />
+                <input
+                  type="text"
+                  value={motivoDesconto}
+                  onChange={(e) => setMotivoDesconto(e.target.value)}
+                  placeholder="Motivo do desconto"
+                  style={{
+                    flex: 2,
+                    minWidth: '80px',
+                    background: 'rgba(26, 26, 46, 0.5)',
+                    border: '1px solid rgba(232, 80, 104, 0.3)',
+                    color: '#F5F0E0',
+                    padding: mobile ? '0.5rem' : '0.7rem',
+                    borderRadius: '10px',
+                    fontSize: mobile ? '0.7rem' : '0.9rem'
+                  }}
+                />
                 <button
                   onClick={descontarPontosGerais}
-                  title="Descontar pontos gerais do membro"
                   style={{
                     background: '#E85068',
                     border: '1px solid #E85068',
@@ -1360,14 +1765,8 @@ function Admin() {
                   {mobile ? '💀' : 'DESCONTAR'}
                 </button>
               </div>
-              {pontosParaDescontar && Number(pontosParaDescontar) > 0 && (
-                <small style={{ fontSize: mobile ? '0.4rem' : '0.80rem', color: '#E85068', display: 'block', marginTop: '4px' }}>
-                  ⚠️ Descontará {pontosParaDescontar} pontos
-                </small>
-              )}
             </div>
 
-            {/* ADICIONAR PONTOS */}
             <div>
               <label style={{ fontFamily: "'IM Fell English SC', serif", fontSize: mobile ? '0.5rem' : '0.6rem', color: '#4a9e6e', display: 'block', marginBottom: '0.3rem' }}>
                 ⭐ ADICIONAR PONTOS
@@ -1375,16 +1774,17 @@ function Admin() {
               <div style={{
                 display: 'flex',
                 gap: '0.3rem',
-                alignItems: 'center'
+                alignItems: 'center',
+                flexWrap: 'wrap'
               }}>
                 <input
                   type="number"
-                  placeholder="quantos pts?"
                   value={pontosParaAdicionar}
                   onChange={(e) => setPontosParaAdicionar(e.target.value)}
                   min="1"
                   style={{
                     flex: 1,
+                    minWidth: '50px',
                     background: 'rgba(26, 26, 46, 0.5)',
                     border: '1px solid rgba(74, 158, 110, 0.5)',
                     color: '#F5F0E0',
@@ -1394,9 +1794,24 @@ function Admin() {
                     fontSize: mobile ? '0.7rem' : '0.9rem'
                   }}
                 />
+                <input
+                  type="text"
+                  value={motivoAdicao}
+                  onChange={(e) => setMotivoAdicao(e.target.value)}
+                  placeholder="Motivo da adição"
+                  style={{
+                    flex: 2,
+                    minWidth: '80px',
+                    background: 'rgba(26, 26, 46, 0.5)',
+                    border: '1px solid rgba(74, 158, 110, 0.3)',
+                    color: '#F5F0E0',
+                    padding: mobile ? '0.5rem' : '0.7rem',
+                    borderRadius: '10px',
+                    fontSize: mobile ? '0.7rem' : '0.9rem'
+                  }}
+                />
                 <button
                   onClick={adicionarPontosGerais}
-                  title="Adicionar pontos gerais ao membro"
                   style={{
                     background: '#2d7a3b',
                     border: '1px solid #4a9e6e',
@@ -1422,13 +1837,65 @@ function Admin() {
                   {mobile ? '⭐' : 'ADICIONAR'}
                 </button>
               </div>
-              {pontosParaAdicionar && Number(pontosParaAdicionar) > 0 && (
-                <small style={{ fontSize: mobile ? '0.4rem' : '0.55rem', color: '#4a9e6e', display: 'block', marginTop: '4px' }}>
-                  ✨ Adicionará {pontosParaAdicionar} pontos
-                </small>
-              )}
             </div>
           </div>
+
+          {/* HISTÓRICO DE MOVIMENTAÇÕES */}
+          {movimentacoes.length > 0 && (
+            <div style={{
+              marginTop: mobile ? '1rem' : '1.5rem',
+              background: 'rgba(26, 26, 46, 0.3)',
+              border: '1px solid rgba(212, 175, 90, 0.2)',
+              padding: mobile ? '0.8rem' : '1rem',
+              borderRadius: '16px'
+            }}>
+              <h4 style={{
+                fontFamily: "'Cinzel Decorative', serif",
+                fontSize: mobile ? '0.6rem' : '0.8rem',
+                color: '#F5D488',
+                marginBottom: '0.5rem'
+              }}>
+                📊 HISTÓRICO DE MOVIMENTAÇÕES - ETAPA {etapaAtual}
+              </h4>
+              <div style={{
+                maxHeight: '200px',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.3rem'
+              }}>
+                {movimentacoes.map((mov, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.3rem 0.5rem',
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: '8px',
+                    fontSize: mobile ? '0.5rem' : '0.6rem',
+                    borderLeft: `3px solid ${mov.tipo_movimentacao === 'adicao' ? '#4a9e6e' : mov.tipo_movimentacao === 'remocao' ? '#E85068' : '#D4A83A'}`
+                  }}>
+                    <span style={{ color: '#A89870' }}>
+                      {formatarDataBrasilia(mov.data_movimentacao)}
+                    </span>
+                    <span style={{
+                      color: mov.tipo_movimentacao === 'adicao' ? '#4a9e6e' : mov.tipo_movimentacao === 'remocao' ? '#E85068' : '#D4A83A',
+                      fontWeight: 'bold'
+                    }}>
+                      {mov.tipo_movimentacao === 'adicao' ? '+' : mov.tipo_movimentacao === 'remocao' ? '-' : ''}
+                      {mov.quantidade} pts
+                    </span>
+                    <span style={{ color: '#F5F0E0' }}>
+                      {mov.pontos_antes} → {mov.pontos_depois}
+                    </span>
+                    <span style={{ color: '#A89870', fontSize: '0.5rem' }}>
+                      {mov.motivo}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={{
             marginTop: mobile ? '1rem' : '2rem',
@@ -1438,7 +1905,9 @@ function Admin() {
             textAlign: 'center',
             borderRadius: '16px'
           }}>
-            <span style={{ fontFamily: "'IM Fell English SC', serif", fontSize: mobile ? '0.5rem' : '0.7rem', color: '#D4A83A' }}>PONTUAÇÃO TOTAL DO MEMBRO</span>
+            <span style={{ fontFamily: "'IM Fell English SC', serif", fontSize: mobile ? '0.5rem' : '0.7rem', color: '#D4A83A' }}>
+              PONTUAÇÃO DO MEMBRO - ETAPA {etapaAtual}
+            </span>
             <br />
             <span style={{
               fontFamily: "'Cinzel Decorative', serif",
@@ -1450,6 +1919,39 @@ function Admin() {
             }}>
               {pontosMembro}
             </span>
+            {mediaEtapaMembro > 0 && (
+              <div style={{ marginTop: '0.3rem' }}>
+                <span style={{ 
+                  fontFamily: "'IM Fell English SC', serif", 
+                  fontSize: mobile ? '0.4rem' : '0.8rem', 
+                  color: '#A89870' 
+                }}>
+                  📊 Média da etapa: {mediaEtapaMembro.toFixed(2)} pts
+                </span>
+              </div>
+            )}
+            {mediaFinalMembro > 0 && (
+              <div style={{ marginTop: '0.2rem' }}>
+                <span style={{ 
+                  fontFamily: "'IM Fell English SC', serif", 
+                  fontSize: mobile ? '0.4rem' : '0.8rem', 
+                  color: '#F5D488' 
+                }}>
+                  🏆 Média final: {mediaFinalMembro.toFixed(2)} pts
+                </span>
+              </div>
+            )}
+            {avaliacoesCount > 0 && (
+              <div style={{ marginTop: '0.2rem' }}>
+                <span style={{ 
+                  fontFamily: "'IM Fell English SC', serif", 
+                  fontSize: mobile ? '0.35rem' : '0.6rem', 
+                  color: '#A89870' 
+                }}>
+                  {avaliacoesCount} avaliação(ões) nesta etapa
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
